@@ -1,6 +1,6 @@
 # Semust MCP Server
 
-[![Version 1.8.0](https://img.shields.io/badge/version-1.8.0-blue.svg)](CHANGELOG.md)
+[![Version 1.9.0](https://img.shields.io/badge/version-1.9.0-blue.svg)](CHANGELOG.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -132,7 +132,7 @@ Once set up, just talk to Claude naturally:
 
 ### Step 1: Get Your API Key
 
-Log in to [Semust](https://semust.com) > **Ayarlar > MCP Kurulumu** and create an **MCP key**.
+Log in to Semust, open [**Settings → MCP Setup**](https://app.semust.com/settings?tab=mcp) (Turkish interface: **Ayarlar > MCP Kurulumu**) and create an **MCP key**.
 Switch on **"Sosyal medyada paylaşım yapabilir"** only if Claude should be able to draft and
 schedule your social posts; leave it off for read-only use. The key is shown once — copy it.
 
@@ -147,11 +147,11 @@ third-party integration at all.
 
 **Option A: Download ZIP** (easiest)
 
-[Download ZIP](https://github.com/semust/semust-mcp/archive/refs/heads/main.zip) > Extract to a folder you'll remember.
+[Download ZIP](https://github.com/Semust-com/semust-mcp/archive/refs/heads/main.zip) > Extract to a folder you'll remember.
 
 **Option B: Git Clone**
 ```bash
-git clone https://github.com/semust/semust-mcp.git
+git clone https://github.com/Semust-com/semust-mcp.git
 ```
 
 Then install dependencies:
@@ -323,6 +323,29 @@ In a new Claude chat, look for the **tools icon** (hammer/wrench) near the text 
 Type: **"Show me my projects"** — Claude should list your Semust projects.
 
 ---
+
+## Load only the tools you need
+
+By default the server exposes all 82 tools. To keep your assistant focused, set `SEMUST_MCP_TOOLSETS` to the families you use. `list_projects` is always included.
+
+```json
+"env": {
+  "SEMUST_API_KEY": "your-api-key-here",
+  "SEMUST_BASE_URL": "https://api.semust.com/v1/mcp",
+  "SEMUST_MCP_TOOLSETS": "gsc,rank,aiRank"
+}
+```
+
+| Family | Tools | Family | Tools |
+| --- | --- | --- | --- |
+| `gsc` | Search Console data and reports | `ym` | Yandex Metrica |
+| `ga` | Google Analytics 4 | `bing` | Bing Webmaster |
+| `gads` | Google Ads | `metrik` | Semust Metrik web analytics |
+| `rank` | Rank Tracker | `changes` | Change Monitor |
+| `aiRank` | AI Rank Tracker | `competitor` | Competitor Analysis |
+| `indexing` | Indexing Monitor | `social` | LinkedIn, Facebook, Instagram posting |
+
+Unset, empty or `all` loads everything. A misspelt name loads everything and prints a warning, so a typo never hides tools.
 
 ## Security
 
@@ -572,8 +595,8 @@ picking the block that matches your operating system.
 | `python` not recognized | On macOS/Linux use `python3` (`which python3` gives the full path); on Windows use the full path to `python.exe` (see Step 3) |
 | Server fails to start, path not found | The path in `args` must be absolute and match your OS — `/Users/you/...` on macOS, `C:\\Users\\you\\...` on Windows. `~` is not expanded |
 | "Invalid API key" (401) | Double-check your key in [Semust Settings](https://semust.com) |
-| `scoped_key_required` or `write_scope_required` | Social media needs an MCP key: Semust > Ayarlar > MCP Kurulumu > create one with "Sosyal medyada paylaşım yapabilir" switched on, put it in your config, restart Claude |
-| `wrong_key_type` | You pasted a Looker Studio key. Create an MCP key in Semust > Ayarlar > MCP Kurulumu |
+| `scoped_key_required` or `write_scope_required` | Social media needs an MCP key: Semust > Settings → MCP Setup > create one with "Can post to social media" switched on, put it in your config, restart Claude |
+| `wrong_key_type` | You pasted a Looker Studio key. Create an MCP key in Semust > Settings → MCP Setup |
 | `platform_coming_soon` | Facebook and Instagram posting opens after Meta's review; LinkedIn works now |
 | `ImportError: cannot import name 'eval_type_backport'` | Your `mcp` package is too old for the pydantic you have. Run `pip install -U -r requirements.txt` |
 | "User not active" (403) | You need a paid plan — [semust.com/fiyatlar](https://semust.com/fiyatlar) |

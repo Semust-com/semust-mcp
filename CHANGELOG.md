@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.9.0] - 2026-11-16
+
+### Added — `SEMUST_MCP_TOOLSETS`: expose only the tool families you need
+- Set `SEMUST_MCP_TOOLSETS` to a comma-separated list of families, for example `gsc` or `gsc,rank,aiRank`, and the server registers only those tools plus `list_projects`. Unset, empty or `all` keeps all 82 tools.
+- Families: `projects`, `gsc`, `ga`, `gads`, `rank`, `aiRank`, `indexing`, `ym`, `bing`, `metrik`, `changes`, `competitor`, `social`. Matching ignores case, `_` and `-`.
+- A misspelt family name keeps every tool and prints a warning on stderr, instead of silently hiding tools.
+- Fewer tools means less of the client's context spent on tool descriptions and fewer wrong-tool picks.
+- Tested on mcp 1.30 and 2.3 (`tests/test_toolsets.py`).
+
+### Changed
+- Repository moved to the Semust-com organization: https://github.com/Semust-com/semust-mcp (the old URL redirects).
+
 ## [1.8.0] - 2026-11-13
 
 ### Added — Social Media Tools (8): LinkedIn, Facebook Pages, Instagram

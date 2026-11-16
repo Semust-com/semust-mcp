@@ -29,7 +29,7 @@ from mcp.types import ToolAnnotations
 
 load_dotenv()
 
-__version__ = "1.8.0"
+__version__ = "1.9.0"
 
 API_KEY = os.environ.get("SEMUST_API_KEY", "")
 BASE_URL = os.environ.get("SEMUST_BASE_URL", "https://api.semust.com/v1/mcp")
@@ -2927,6 +2927,116 @@ def social_import_media(project_id: str, source_url: str) -> str:
     return api_post(_social_path(project_id, "/media"), {"source_url": source_url})
 
 
+# ─── Toolsets ─────────────────────────────────────────────
+#
+# SEMUST_MCP_TOOLSETS limits which tool families this server exposes, for example
+# "gsc" or "gsc,rank,aiRank". Unset, empty or "all" exposes every tool. The keys are
+# the families[].key values of the website's MCP catalog
+# (website/components/(website)/features/mcp/mcp-catalog.json); the website's
+# scripts/mcp-catalog-check.mjs fails if the two drift apart. The per-family GitHub
+# repos (google-search-console-mcp, google-ads-mcp, ...) install this same server
+# with one of these values, so a client only sees — and only spends context on —
+# the tools it was set up for.
+
+TOOLSET_PREFIXES = {
+    "projects": ("list_projects",),
+    "gsc": ("get_", "report_"),
+    "ga": ("ga_",),
+    "gads": ("gads_",),
+    "rank": ("rank_",),
+    "aiRank": ("ai_rank_",),
+    "indexing": ("indexing_",),
+    "ym": ("ym_",),
+    "bing": ("bing_",),
+    "metrik": ("metrik_",),
+    "changes": ("changes_",),
+    "competitor": ("competitor_",),
+    "social": ("social_",),
+}
+
+# Every other tool needs a project_id, which only list_projects returns.
+ALWAYS_ON = frozenset({"list_projects"})
+
+
+def _norm_family(key: str) -> str:
+    return key.strip().lower().replace("_", "").replace("-", "")
+
+
+_FAMILY_BY_NORM = {_norm_family(k): k for k in TOOLSET_PREFIXES}
+
+
+def tool_family(name: str):
+    """The toolset key a tool belongs to, or None."""
+    for family, prefixes in TOOLSET_PREFIXES.items():
+        if name.startswith(prefixes):
+            return family
+    return None
+
+
+def parse_toolsets(spec):
+    """Turn a SEMUST_MCP_TOOLSETS value into family keys.
+
+    Returns None for "every tool" (unset, empty, "all"), else (families, unknown).
+    Matching ignores case, "_" and "-", so "aiRank", "ai_rank" and "AIRANK" are one key.
+    """
+    if spec is None or not spec.strip() or spec.strip().lower() == "all":
+        return None
+    families, unknown = set(), []
+    for raw in spec.split(","):
+        if not raw.strip():
+            continue
+        key = _FAMILY_BY_NORM.get(_norm_family(raw))
+        if key:
+            families.add(key)
+        else:
+            unknown.append(raw.strip())
+    return families, unknown
+
+
+def _registered_tool_names(server) -> list:
+    manager = getattr(server, "_tool_manager", None)
+    tools = getattr(manager, "_tools", None)
+    if isinstance(tools, dict):
+        return list(tools)
+    raise RuntimeError("cannot list registered tools on this mcp version")
+
+
+def _remove_tool(server, name: str) -> None:
+    if hasattr(server, "remove_tool"):
+        server.remove_tool(name)
+    else:  # older mcp without the public API
+        del server._tool_manager._tools[name]
+
+
+def apply_toolsets(server, spec) -> list:
+    """Remove the tools outside the families named in `spec`; returns what was removed.
+
+    An unknown family name is a typo in someone's MCP config. Hiding tools because of
+    it would look like a broken server, so the server warns on stderr (stdout is the
+    MCP channel) and keeps every tool instead.
+    """
+    import sys
+
+    parsed = parse_toolsets(spec)
+    if parsed is None:
+        return []
+    families, unknown = parsed
+    if unknown or not families:
+        print(
+            f"semust-mcp: SEMUST_MCP_TOOLSETS has unknown families {unknown or [spec]}; "
+            f"serving every tool. Valid: {', '.join(TOOLSET_PREFIXES)}",
+            file=sys.stderr,
+        )
+        return []
+    removed = [
+        name for name in _registered_tool_names(server)
+        if name not in ALWAYS_ON and tool_family(name) not in families
+    ]
+    for name in removed:
+        _remove_tool(server, name)
+    return removed
+
+
 # ─── Main ─────────────────────────────────────────────────
 
 
@@ -2946,4 +3056,5 @@ if __name__ == "__main__":
             '    $env:SEMUST_BASE_URL="http://localhost:3001/v1/mcp"\n'
             "    python semust_mcp.py"
         )
+    apply_toolsets(mcp, os.environ.get("SEMUST_MCP_TOOLSETS"))
     mcp.run()
