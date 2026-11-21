@@ -29,7 +29,7 @@ from mcp.types import ToolAnnotations
 
 load_dotenv()
 
-__version__ = "1.9.0"
+__version__ = "1.11.0"
 
 API_KEY = os.environ.get("SEMUST_API_KEY", "")
 BASE_URL = os.environ.get("SEMUST_BASE_URL", "https://api.semust.com/v1/mcp")
@@ -76,6 +76,7 @@ mcp = FastMCP(
     "semust-mcp",
     instructions="""You are connected to Semust, a Turkish SEO analytics platform. You can access the user's Google Search Console, Google Analytics, AND Google Ads data through these tools.
 You can also draft, schedule and publish the user's own posts to LinkedIn, Facebook Pages and Instagram (social_* tools) — ONLY with the user's explicit approval; see SOCIAL POSTING RULES.
+You can also build and manage Search Console content groups (content_group_* tools): saved sets of pages or queries Semust tracks together — after a preview and the user's yes; see CONTENT GROUP RULES.
 
 WORKFLOW:
 1. ALWAYS call list_projects first to get available projects and their project_id values.
@@ -119,6 +120,14 @@ Search Console tools:
 - User asks about "quick wins", "almost ranking", "page 2", "striking distance" → report_striking_distance
 - User asks about "low CTR", "click-through rate", "title optimization" → report_low_ctr
 - User asks about "thin content", "underperforming", "content audit", "remove pages" → report_thin_content
+
+Search Console content groups (track a set of pages or queries together):
+- "group my blog pages", "track these pages together", "create a content group" → content_group_list → content_group_suggest or get_pages → content_group_preview → user says yes → content_group_create
+- "group these keywords", "a group for my brand queries" → content_group_list → get_keywords → content_group_preview(type="query") → user says yes → content_group_create
+- "which content groups do I have?" → content_group_list
+- "how is my blog group doing?", "content group performance", "did the group grow?" → content_group_get
+- "add/remove pages from the group", "rename the group" → content_group_preview (new patterns) → yes → content_group_update
+- "delete the group" → yes → content_group_delete
 
 Google Analytics tools:
 - "how is my traffic?", "analytics overview", "visitor stats" → ga_get_overview
@@ -337,6 +346,8 @@ PROACTIVE SUGGESTIONS — after showing results, suggest logical next steps:
 - After report_content_decay → "Want me to check which keywords these declining pages rank for?"
 - After report_striking_distance → "Want me to check CTR for these almost-ranking keywords?"
 - After report_cannibalization → "Want me to look at the pages competing and suggest which to consolidate?"
+- After get_pages or report_content_decay (pages sharing a folder) → "Want me to save these pages as a content group so Semust tracks them together?"
+- After content_group_create → "Want me to show how this group performed over the last 3 months?"
 - After ga_get_overview → "Want me to dig into traffic trends or see which channels drive the most traffic?"
 - After ga_get_overview (if bounce rate high) → "Bounce rate looks high. Want me to analyze engagement by page to find problem areas?"
 - After ga_report_traffic_trends (if declining) → "Traffic is declining. Want me to check which channels are losing users?"
@@ -358,6 +369,16 @@ PROACTIVE SUGGESTIONS — after showing results, suggest logical next steps:
 - After bing_get_crawl_issues → "Want me to check your Google indexing status too for a complete crawl health picture?"
 - After bing_get_link_counts → "Want me to check specific URL backlinks or compare with Google's data?"
 
+CONTENT GROUP RULES (content_group_* — these change the user's Semust project):
+1. What a group is: a saved set of pages or queries whose Search Console numbers Semust adds up (Semust > Search Console > İçerik Grupları). type="page": a URL is in the group when it CONTAINS one of the patterns ("/blog/" = every blog URL; a full URL = that page). type="query": EXACT search queries, one per pattern — "avukat" does NOT match "ankara avukat". Everything is lowercased.
+2. Call content_group_list first. If a group with the same name or the same patterns exists, show it (content_group_get) or offer content_group_update instead of creating a duplicate.
+3. Never invent patterns. Page groups: take folders from content_group_suggest or URLs from get_pages. Query groups: pick real queries from get_keywords (it has a limit parameter; ask for more rows when needed).
+4. Before content_group_create, ALWAYS call content_group_preview with the same type and patterns and show the user: the name, type, patterns, total_matches, total clicks and impressions, per_pattern counts, the top matches and every warning. Fix flagged patterns (no matches, whole site, already covered) with the user. Create only after the user clearly says yes.
+5. content_group_update and content_group_delete change what the user sees in Semust: say exactly what changes (old → new name or patterns, or which group is deleted) and wait for a yes. patterns in an update REPLACES the whole list, so send the complete new list.
+6. The type cannot change: delete the group and create a new one, with the user's yes.
+7. Propose groups; do not create groups the user did not ask for. After create or update, give the user app_url.
+8. content_group_get compares the first and second half of the date range. avg_position_change < 0 means the group moved UP. Search Console lags 2 days.
+
 SOCIAL POSTING RULES (CRITICAL — these tools publish publicly in the user's name):
 1. Call social_get_accounts first. If accounts is empty, tell the user to connect an account in Semust > Proje > Sosyal Medya. If a platform shows can_connect=false and stage "coming_soon", say it is coming soon (Facebook and Instagram are awaiting Meta's approval) — do not promise a date.
 2. Use only destination_id values from the latest social_get_accounts of THIS project. If there is more than one destination and the user did not name one, list them (name, profile or page, platform) and ASK. Never pick a default.
@@ -366,7 +387,7 @@ SOCIAL POSTING RULES (CRITICAL — these tools publish publicly in the user's na
 5. Time: use server_time from social_get_accounts as "now" and its timezone unless the user names another. publish_at is RFC 3339 with an offset, e.g. 2026-11-14T10:00:00+03:00 — never in the past, at most 365 days ahead.
 6. Say "scheduled" (or "being published" for mode="now"), never "published", until social_get_post shows the delivery with status "published" and a post_url. Publishing runs in the background and usually takes about a minute.
 7. Respect platforms[].capabilities: max_text_runes, max_images, image_formats, allows_link, allows_document, requires_media. With several platforms the strictest limit applies. Instagram: an image is required, JPEG only, no clickable links (put the link in the text or skip Instagram). Use caption_overrides for a different text per destination (e.g. a shorter Instagram caption).
-8. Media: upload each image with social_import_media(source_url) first and pass the returned url in media_urls. Only public JPEG/PNG/GIF images (max 8 MB) or a PDF (max 20 MB, LinkedIn document post). Videos and Reels cannot be uploaded through these tools — the user adds them in Semust. Never import an image the user did not provide or approve.
+8. Media: upload each file with social_import_media(source_url) first and pass the returned url in media_urls. Only public JPEG/PNG/GIF images (max 8 MB), a PDF (max 20 MB, LinkedIn document post) or one MP4 video (max 100 MB: a LinkedIn video post or a Facebook/Instagram Reel). A video post carries that one video and nothing else. Never import a file the user did not provide or approve.
 9. If social_create_post returns duplicate=true, the post already exists (an earlier identical call worked): report that post_id and do not create another.
 10. Semust shows the user an in-app notice, with a cancel link, for every post an AI assistant schedules. Deleting a post cancels deliveries that are not published yet; anything already published stays live on the platform and has to be removed there.
 
@@ -389,7 +410,12 @@ ERROR HANDLING — give clear actionable guidance:
 - "invalid_metric" → Valid Web Vitals metrics are FCP, LCP, CLS, TTFB, INP.
 - "metrik_unavailable" → Tell user: "The analytics store is temporarily unavailable. Try again in a minute." Do not retry immediately.
 - Metrik tools return zeros but tracking.has_data is false → Tell user the tracking script has never reported, so the key exists but the snippet is not installed on the site. Do NOT report this as "no traffic".
-- "write_scope_required" or "scoped_key_required" → Tell user: "This API key cannot use social posting. In Semust go to Ayarlar > MCP Kurulumu, create an MCP key with 'Sosyal medyada paylaşım yapabilir' switched on, put it in your AI assistant's Semust config (SEMUST_API_KEY) and restart the assistant." Do not retry.
+- "write_scope_required" or "scoped_key_required" on a social_* tool → Tell user: "This API key cannot use social posting. In Semust go to Ayarlar > MCP Kurulumu, create an MCP key with 'Sosyal medyada paylaşım yapabilir' switched on, put it in your AI assistant's Semust config (SEMUST_API_KEY) and restart the assistant." Do not retry.
+- "write_scope_required" on a content_group_* tool → Tell user: "This is the old account API key, which can only read. In Semust go to Ayarlar > MCP Kurulumu, create an MCP key (no extra switch needed), put it in your AI assistant's Semust config (SEMUST_API_KEY) and restart the assistant." Do not retry.
+- "content_group_exists" → A group with that name already exists. Call content_group_list, then offer to update that group or pick another name.
+- "content_group_not_found" → The id is stale or from another project. Call content_group_list again.
+- "invalid_group_type", "invalid_group_name", "no_patterns", "too_many_patterns", "pattern_too_long", "nothing_to_update", "invalid_group_id" → The message says what to fix. Fix it with the user, preview again, then retry.
+- "gsc_rate_limited" → Search Console is throttling; wait a minute, do NOT loop. "gsc_reconnect_required" → Tell user to reconnect Search Console in Semust > Project Settings > Integrations.
 - "wrong_key_type" → The user configured a Looker Studio key. They need an MCP key from Semust > Ayarlar > MCP Kurulumu.
 - "target_not_found" → The destination_id is stale or from another project. Call social_get_accounts again and use the new ids.
 - "reconnect_required" → Tell user: "This account's connection expired. Reconnect it in Semust > Sosyal Medya > Hesaplar."
@@ -420,7 +446,8 @@ RESPONSE FORMAT: Most tools return {_meta: {total, returned, truncated}, items: 
 )
 
 
-def _api_request(method: str, path: str, params: dict | None = None, body: dict | None = None) -> str:
+def _api_request(method: str, path: str, params: dict | None = None, body: dict | None = None,
+                 timeout: int = 60) -> str:
     """Call the Semust API and return its JSON as a string for the model.
 
     Errors come back as "<code>: <message>" so the model can match the code against the
@@ -432,7 +459,7 @@ def _api_request(method: str, path: str, params: dict | None = None, body: dict 
     if params:
         params = {k: v for k, v in params.items() if v not in ("", None)}
     try:
-        resp = requests.request(method, f"{BASE_URL}{path}", params=params, json=body, headers=headers, timeout=60)
+        resp = requests.request(method, f"{BASE_URL}{path}", params=params, json=body, headers=headers, timeout=timeout)
     except requests.RequestException as e:
         raise SemustAPIError(f"Request to Semust API failed: {e}") from e
     try:
@@ -450,13 +477,13 @@ def _api_request(method: str, path: str, params: dict | None = None, body: dict 
     return json.dumps(data, ensure_ascii=False)
 
 
-def api_get(path: str, params: dict | None = None) -> str:
+def api_get(path: str, params: dict | None = None, timeout: int = 60) -> str:
     """GET from the Semust API and return JSON string for LLM consumption."""
-    return _api_request("GET", path, params=params)
+    return _api_request("GET", path, params=params, timeout=timeout)
 
 
-def api_post(path: str, body: dict | None = None) -> str:
-    return _api_request("POST", path, body=body or {})
+def api_post(path: str, body: dict | None = None, timeout: int = 60) -> str:
+    return _api_request("POST", path, body=body or {}, timeout=timeout)
 
 
 def api_patch(path: str, body: dict) -> str:
@@ -879,6 +906,252 @@ def report_thin_content(
         "start_date": start_date, "end_date": end_date,
         "type": type, "limit": str(limit),
     })
+
+
+# ─── Search Console: Content Groups ──────────────────────
+#
+# A content group is a saved set of pages (URL patterns) or queries (exact queries) whose
+# Search Console numbers Semust adds up; the app shows them under Search Console > İçerik
+# Grupları. Any MCP key can create, edit and delete groups (they are private to the project
+# and undone by deleting them); the old account key can only read. The backend applies the
+# app's own rules — lowercasing, page/query only, one name per project — and refuses more than
+# 100 patterns. The server instructions require a preview and the user's yes before writes.
+
+_CG_READ = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
+_CG_CREATE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False)
+_CG_UPDATE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False)
+_CG_DELETE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False)
+
+_GROUP_ID_RE = re.compile(r"^[1-9][0-9]{0,9}$")
+
+# Preview sends the patterns in the query string (it is a read, so it is a GET and does not
+# spend the key's write budget). Keep the URL well under what proxies accept.
+_MAX_PREVIEW_URL = 12000
+
+# Suggest, preview and get ask Search Console once per pattern; a large group can take a while.
+_CG_TIMEOUT = 100
+
+
+def _cg_path(project_id: str, rest: str = "") -> str:
+    return f"/projects/{_safe_project_id(project_id)}/search-console/content-groups{rest}"
+
+
+def _safe_group_id(group_id) -> str:
+    value = str(group_id).strip() if isinstance(group_id, (int, str)) and not isinstance(group_id, bool) else ""
+    if not _GROUP_ID_RE.match(value):
+        raise SemustAPIError("Invalid content_group_id. Use a content_group_id from content_group_list.")
+    return value
+
+
+def _pattern_list(patterns) -> list:
+    if isinstance(patterns, str):
+        patterns = [patterns]
+    if not isinstance(patterns, list) or not all(isinstance(p, str) for p in patterns):
+        raise SemustAPIError("patterns must be a list of strings.")
+    return patterns
+
+
+@mcp.tool(annotations=_CG_READ)
+def content_group_list(project_id: str) -> str:
+    """List the project's saved Search Console content groups (definitions only, no metrics).
+
+    ALWAYS call this before creating a group, so you do not create a duplicate, and to get the content_group_id other content_group_* tools need.
+
+    When to use: User asks which content groups they have, wants to see or change a group, or asks to create one.
+    Do NOT use for: A group's clicks and impressions (use content_group_get).
+
+    Returns: {_meta, items: [{content_group_id, name, type ("page" or "query"), patterns, pattern_count, created_at, updated_at, app_url}]}
+
+    Tips:
+    - type "page": a URL belongs to the group when it CONTAINS one of the patterns. type "query": the group holds exactly those search queries
+    - app_url opens the group in Semust; give it to the user when they want to see it there
+
+    Args:
+        project_id: Project ID from list_projects (Search Console must be connected)
+    """
+    return api_get(_cg_path(project_id))
+
+
+@mcp.tool(annotations=_CG_READ)
+def content_group_get(
+    project_id: str,
+    content_group_id: str,
+    start_date: str,
+    end_date: str,
+    limit: int = 25,
+) -> str:
+    """Get one content group's Search Console performance: totals, a first-half vs second-half comparison, the daily series and its top pages or queries.
+
+    When to use: User asks how a content group (e.g. "the blog", "brand queries") is doing, whether it grew, or which pages/queries in it perform best.
+    Do NOT use for: Listing groups (use content_group_list), checking patterns before saving (use content_group_preview).
+
+    Returns: {content_group: {...}, period, summary: {clicks, impressions, ctr, avg_position, members, first_half: {days, clicks, impressions, avg_position, avg_ctr}, second_half: {...}, clicks_change_pct, impressions_change_pct, avg_position_change}, daily: [{date, clicks, impressions}], members: {_meta, items: [{key, clicks, impressions, ctr, avg_position, clicks_first_half, clicks_second_half, clicks_change_pct}]}}
+
+    Tips:
+    - The comparison splits the date range in two halves; pick a range long enough to mean something (28+ days)
+    - avg_position_change is second half minus first half: NEGATIVE means the group moved UP in the results
+    - members.key is the URL (page group) or the query (query group), sorted by clicks; check members._meta.truncated
+    - These are the numbers the Semust app shows for the same dates
+    - Search Console data lags 2 days: end_date = today - 2 days at the latest
+
+    Args:
+        project_id: Project ID from list_projects
+        content_group_id: ID from content_group_list
+        start_date: Start date YYYY-MM-DD
+        end_date: End date YYYY-MM-DD
+        limit: Max members returned (default 25, max 200)
+    """
+    return api_get(
+        _cg_path(project_id, f"/{_safe_group_id(content_group_id)}"),
+        {"start_date": start_date, "end_date": end_date, "limit": str(limit)},
+        timeout=_CG_TIMEOUT,
+    )
+
+
+@mcp.tool(annotations=_CG_READ)
+def content_group_suggest(project_id: str, start_date: str, end_date: str) -> str:
+    """Suggest page groups from the site's URL structure: each first-level folder (e.g. /blog/) with 3+ URLs that get search impressions.
+
+    When to use: User wants to create content groups but has not said which pages, or asks "how could I group my site?".
+    Do NOT use for: Query groups (find queries with get_keywords instead).
+
+    Returns: {period, suggestions: [{pattern, name, url_count, total_clicks, total_impressions, sample_urls}]}
+
+    Tips:
+    - pattern is ready to use as a page pattern; name is a starting point the user can change
+    - Show the suggestions, let the user pick, then content_group_preview the chosen patterns
+    - Deeper folders (e.g. /blog/seo/) are not suggested; build them from get_pages if the user wants them
+    - Use the last 28 days (end_date = today - 2 days) unless the user asks for another range
+
+    Args:
+        project_id: Project ID from list_projects
+        start_date: Start date YYYY-MM-DD
+        end_date: End date YYYY-MM-DD
+    """
+    return api_get(_cg_path(project_id, "/suggest"), {"start_date": start_date, "end_date": end_date}, timeout=_CG_TIMEOUT)
+
+
+@mcp.tool(annotations=_CG_READ)
+def content_group_preview(
+    project_id: str,
+    type: str,
+    patterns: list[str],
+    start_date: str,
+    end_date: str,
+) -> str:
+    """Show what a content group WOULD contain — matched pages or queries with their clicks — without saving anything.
+
+    ALWAYS run this before content_group_create (and before changing a group's patterns), and show the user the result.
+
+    When to use: Building or changing a content group with the user; checking what a pattern matches.
+
+    Returns: {type, patterns, period, total_matches, total_clicks, total_impressions, per_pattern: [{pattern, matches, clicks, impressions}], matches: [{url, clicks, impressions, position, ctr}], matches_shown, warnings: [...]}
+
+    Tips:
+    - type="page": a URL matches when it CONTAINS the pattern. "/blog/" = every URL with /blog/ in it; a full URL = that page (plus any URL that starts with it)
+    - type="query": a query matches only when it is EXACTLY the pattern. "avukat" does not match "ankara avukat" — list every query you want, taken from get_keywords
+    - Patterns are lowercased. A URL matched by two patterns is counted once
+    - per_pattern shows each pattern on its own: a pattern with matches=0 is almost always a mistake
+    - warnings must be shown to the user (no matches, a pattern that matches the whole site, a pattern already covered by another)
+    - matches lists the top 50 by clicks; total_matches is the full count
+    - Use the last 28 days (end_date = today - 2 days) unless the user asks otherwise
+
+    Args:
+        project_id: Project ID from list_projects
+        type: "page" (URL patterns) or "query" (exact search queries)
+        patterns: The patterns, e.g. ["/blog/", "/rehber/"] or ["semust", "semust seo"] (at most 100)
+        start_date: Start date YYYY-MM-DD
+        end_date: End date YYYY-MM-DD
+    """
+    from urllib.parse import urlencode
+
+    pats = _pattern_list(patterns)
+    params = {"type": type, "pattern": pats, "start_date": start_date, "end_date": end_date}
+    path = _cg_path(project_id, "/preview")
+    if len(BASE_URL) + len(path) + 1 + len(urlencode(params, doseq=True)) > _MAX_PREVIEW_URL:
+        raise SemustAPIError(
+            "Too many or too long patterns to preview in one call. Preview them in two halves, "
+            "or use broader page patterns (one folder such as \"/blog/\" instead of many URLs)."
+        )
+    return api_get(path, params, timeout=_CG_TIMEOUT)
+
+
+@mcp.tool(annotations=_CG_CREATE)
+def content_group_create(project_id: str, name: str, type: str, patterns: list[str]) -> str:
+    """Save a new content group in the user's Semust project.
+
+    SAFETY: call content_group_preview with the same type and patterns first, show the user the name, the patterns, what they match and any warnings, and call this ONLY after the user clearly says yes.
+
+    When to use: The user asked for a content group and approved the previewed name and patterns.
+    Do NOT use for: Changing an existing group (use content_group_update) — check content_group_list first.
+
+    Returns: {status: "created", content_group: {content_group_id, name, type, patterns, pattern_count, created_at, updated_at, app_url}}
+
+    Tips:
+    - Give the user app_url: the group is in Semust > Search Console > İçerik Grupları right away
+    - Names are unique per project (content_group_exists otherwise) and stored lowercased
+    - type cannot be changed later
+
+    Args:
+        project_id: Project ID from list_projects
+        name: Group name, e.g. "blog" or "marka sorguları"
+        type: "page" (URL patterns) or "query" (exact search queries)
+        patterns: The previewed patterns (at most 100, each at most 200 characters)
+    """
+    return api_post(_cg_path(project_id), {"name": name, "type": type, "patterns": _pattern_list(patterns)})
+
+
+@mcp.tool(annotations=_CG_UPDATE)
+def content_group_update(
+    project_id: str,
+    content_group_id: str,
+    name: str | None = None,
+    patterns: list[str] | None = None,
+) -> str:
+    """Rename a content group and/or replace its patterns. Only the fields you pass change.
+
+    SAFETY: this changes what the user sees in Semust. Tell the user exactly what changes (old → new name, old → new patterns; preview new patterns with content_group_preview) and wait for a yes.
+
+    When to use: User wants to add or remove pages/queries from a group, or rename it.
+    Do NOT use for: Changing the type (delete and create a new group instead).
+
+    Returns: {status: "updated", content_group: {...}}
+
+    Tips:
+    - patterns REPLACES the whole list: to add one pattern, send the current patterns (from content_group_list) plus the new one
+    - The new name must not be used by another group of the project
+
+    Args:
+        project_id: Project ID from list_projects
+        content_group_id: ID from content_group_list
+        name: New name (omit to keep)
+        patterns: The complete new pattern list (omit to keep)
+    """
+    payload: dict = {}
+    if name is not None:
+        payload["name"] = name
+    if patterns is not None:
+        payload["patterns"] = _pattern_list(patterns)
+    if not payload:
+        raise SemustAPIError("Nothing to change: pass name and/or patterns.")
+    return api_patch(_cg_path(project_id, f"/{_safe_group_id(content_group_id)}"), payload)
+
+
+@mcp.tool(annotations=_CG_DELETE)
+def content_group_delete(project_id: str, content_group_id: str) -> str:
+    """Delete a content group from the user's Semust project. Search Console data is not affected; only the saved group goes.
+
+    SAFETY: confirm with the user first — name the group you will delete.
+
+    When to use: User asks to delete or remove a content group, or to change a group's type (delete, then create).
+
+    Returns: {status: "deleted", content_group_id}
+
+    Args:
+        project_id: Project ID from list_projects
+        content_group_id: ID from content_group_list
+    """
+    return api_delete(_cg_path(project_id, f"/{_safe_group_id(content_group_id)}"))
 
 
 # ─── Google Analytics: Data ────────────────────────────────
@@ -2798,7 +3071,7 @@ def social_create_post(
         destination_ids: Where to post: destination_id values from social_get_accounts
         mode: "draft" (default), "schedule" or "now"
         publish_at: Required for mode="schedule": RFC 3339 with offset, e.g. "2026-11-14T10:00:00+03:00"
-        media_urls: Image (or one PDF, LinkedIn only) URLs returned by social_import_media
+        media_urls: Image URLs, or one PDF (LinkedIn only), or one MP4 video, returned by social_import_media
         link: A URL to attach as a link card (LinkedIn, Facebook)
         caption_overrides: {destination_id: text} to use a different text for some destinations
         dry_run: true (default) = validate only, nothing is saved; false = save it
@@ -2909,22 +3182,25 @@ def social_retry_post(project_id: str, post_id: str) -> str:
 
 @mcp.tool(annotations=_SOCIAL_IMPORT)
 def social_import_media(project_id: str, source_url: str) -> str:
-    """Upload an image (or a PDF for a LinkedIn document post) from a public URL, for use in a post.
+    """Upload an image, a PDF (LinkedIn document post) or an MP4 video from a public URL, for use in a post.
 
-    When to use: Before social_create_post / social_update_post with images. Only for images the user gave you or approved.
+    When to use: Before social_create_post / social_update_post with media. Only for files the user gave you or approved.
 
-    Returns: {url, kind ("image" or "document")} — pass url in media_urls
+    Returns: {url, kind ("image", "document" or "video")} — pass url in media_urls
 
     Tips:
-    - Accepts public http(s) JPEG, PNG or GIF images up to 8 MB, and PDFs up to 20 MB. WebP and other formats are refused
-    - Instagram accepts JPEG only
-    - Videos and Reels cannot be uploaded here; the user adds them in Semust
+    - Accepts public http(s) JPEG, PNG or GIF images up to 8 MB, PDFs up to 20 MB and MP4 videos up to 100 MB. WebP, MOV and other formats are refused
+    - A video becomes a LinkedIn video post (3 s to 30 min) or a Facebook/Instagram Reel (3 to 90 s); a video post carries that one video and nothing else
+    - LinkedIn processes the video when the post goes out; if it is still processing, the post is retried automatically
+    - Instagram accepts JPEG images only
+    - A video upload can take a few minutes
 
     Args:
         project_id: Project ID from list_projects
-        source_url: Public http(s) URL of the image or PDF
+        source_url: Public http(s) URL of the image, PDF or MP4 video
     """
-    return api_post(_social_path(project_id, "/media"), {"source_url": source_url})
+    # The backend streams a video of up to 100 MB to storage within 5 minutes.
+    return api_post(_social_path(project_id, "/media"), {"source_url": source_url}, timeout=330)
 
 
 # ─── Toolsets ─────────────────────────────────────────────
@@ -2940,7 +3216,7 @@ def social_import_media(project_id: str, source_url: str) -> str:
 
 TOOLSET_PREFIXES = {
     "projects": ("list_projects",),
-    "gsc": ("get_", "report_"),
+    "gsc": ("get_", "report_", "content_group_"),
     "ga": ("ga_",),
     "gads": ("gads_",),
     "rank": ("rank_",),

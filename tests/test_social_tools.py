@@ -73,9 +73,9 @@ class SocialToolsTest(unittest.TestCase):
         _FakeAPI.calls.clear()
         _FakeAPI.reply = (200, {"ok": True})
 
-    def test_registers_82_tools_with_social_annotations(self):
+    def test_registers_89_tools_with_social_annotations(self):
         tools = {t.name: t for t in asyncio.run(m.mcp.list_tools())}
-        self.assertEqual(len(tools), 82)
+        self.assertEqual(len(tools), 89)
         self.assertTrue(SOCIAL_TOOLS <= set(tools))
 
         # What the client receives: the camelCase wire names (mcp 2.x stores them as

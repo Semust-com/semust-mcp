@@ -63,7 +63,7 @@ class ToolsetTests(unittest.TestCase):
         self.assertIn("get_keywords", tools)
         self.assertIn("report_striking_distance", tools)
         self.assertFalse([t for t in tools if t.startswith(("ga_", "gads_", "social_", "rank_"))])
-        self.assertEqual(len(tools), 1 + 12)
+        self.assertEqual(len(tools), 1 + 19)
 
     def test_rank_does_not_swallow_ai_rank(self):
         m = fresh_server()

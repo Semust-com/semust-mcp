@@ -1,5 +1,44 @@
 # Changelog
 
+## [1.11.0] - 2026-11-21
+
+### Added — Search Console content groups (7 tools)
+A content group is a saved set of pages or search queries whose Search Console numbers Semust adds up, the same groups as Semust > Search Console > İçerik Grupları. You can now build them by talking to your assistant.
+- `content_group_list` — the project's groups: name, type, patterns and a link to the group in Semust
+- `content_group_get` — one group's clicks, impressions, CTR and position, first half vs second half of the period, the daily series and the top pages or queries in it
+- `content_group_suggest` — page groups suggested from the site's URL folders (for example `/blog/`)
+- `content_group_preview` — what a set of patterns would match, per pattern, with warnings (a pattern that matches nothing, the whole site, or pages another pattern already covers). Nothing is saved
+- `content_group_create`, `content_group_update`, `content_group_delete` — save, rename or re-pattern, and delete a group
+
+How patterns work: in a page group a URL belongs when it **contains** a pattern; in a query group a query belongs only when it **equals** a pattern. Patterns are lowercased; a group holds at most 100.
+
+### Changes need your yes
+- Any MCP key can create, edit and delete groups: they live only in your Semust project and are undone by deleting them, so no extra key switch is needed. The old account API key can only read.
+- The server instructions require a preview and an explicit yes before every create, update and delete. The three write tools are marked as changing tools (MCP annotations) and are not in the README's `alwaysAllow` list, so Claude asks before each one.
+- The four read tools are in the README's `alwaysAllow` list. The family is `gsc`, so `SEMUST_MCP_TOOLSETS=gsc` includes them.
+
+### Changed
+- 89 tools (was 82).
+- Content-group reads can take up to 100 s, because Search Console is asked once per pattern.
+
+### Tests
+- `tests/test_content_group_tools.py` runs every content-group tool against a fake API on localhost: method, path, query (one `pattern` parameter per pattern) and body; that an update sends only the fields given; that ids are checked before they reach a URL; the preview's URL length guard; the error format; annotations and family. Tested on mcp 1.30 and 2.3.
+
+---
+
+## [1.10.0] - 2026-11-17
+
+### Added — video posts through `social_import_media`
+- `social_import_media` now takes a public **MP4 video up to 100 MB** as well as images and PDFs. It returns `kind: "video"`; pass the url in `media_urls`.
+- On LinkedIn a video becomes a video post (3 s to 30 min). Facebook and Instagram turn it into a Reel (3 to 90 s). A video post carries that one video and nothing else.
+- Semust uploads the video to LinkedIn when the post goes out and waits until LinkedIn has processed it. If processing takes too long, the post is retried automatically.
+- The import call waits up to 330 s (was 60 s), because the backend streams a video of up to 100 MB to storage within 5 minutes.
+
+### Changed
+- The server instructions and tool descriptions no longer say videos must be added in the Semust app.
+
+---
+
 ## [1.9.0] - 2026-11-16
 
 ### Added — `SEMUST_MCP_TOOLSETS`: expose only the tool families you need

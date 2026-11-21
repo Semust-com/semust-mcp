@@ -1,6 +1,6 @@
 # Semust MCP Server
 
-[![Version 1.9.0](https://img.shields.io/badge/version-1.9.0-blue.svg)](CHANGELOG.md)
+[![Version 1.10.0](https://img.shields.io/badge/version-1.10.0-blue.svg)](CHANGELOG.md)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -104,6 +104,12 @@ Once set up, just talk to Claude naturally:
 - "What search terms trigger my ads?"
 - "Show me ad performance by country"
 - "Which conversion types am I getting?"
+
+**Content Groups**
+- "Group my blog pages and show me how they did over the last 3 months"
+- "Make a group of my brand queries"
+- "Which of my content groups grew the most?"
+- "Add the /rehber/ pages to my blog group"
 
 **Content Analysis**
 - "Which pages are losing traffic? I need to refresh them"
@@ -220,6 +226,7 @@ Add `mcpServers` to the file. If the file already has content, **merge** this in
         "report_cannibalization", "report_monthly_summary", "report_long_tail",
         "report_winner_loser", "report_questions", "report_content_decay",
         "report_striking_distance", "report_low_ctr", "report_thin_content",
+        "content_group_list", "content_group_get", "content_group_suggest", "content_group_preview",
         "ga_get_overview", "ga_get_traffic_sources", "ga_get_pages",
         "ga_get_geo", "ga_get_devices", "ga_get_key_events",
         "ga_report_traffic_trends", "ga_report_landing_page_performance",
@@ -268,6 +275,7 @@ Add `mcpServers` to the file. If the file already has content, **merge** this in
         "report_cannibalization", "report_monthly_summary", "report_long_tail",
         "report_winner_loser", "report_questions", "report_content_decay",
         "report_striking_distance", "report_low_ctr", "report_thin_content",
+        "content_group_list", "content_group_get", "content_group_suggest", "content_group_preview",
         "ga_get_overview", "ga_get_traffic_sources", "ga_get_pages",
         "ga_get_geo", "ga_get_devices", "ga_get_key_events",
         "ga_report_traffic_trends", "ga_report_landing_page_performance",
@@ -310,7 +318,7 @@ Add `mcpServers` to the file. If the file already has content, **merge** this in
 > not recognised, use the full Python path instead, e.g.
 > `C:\\Users\\you\\AppData\\Local\\Programs\\Python\\Python312\\python.exe`
 >
-> **`alwaysAllow`**: This list lets Claude use Semust tools without asking for permission each time. Every tool in it is read-only. The social tools that create, change, publish or delete posts (`social_create_post`, `social_update_post`, `social_delete_post`, `social_retry_post`, `social_import_media`) are **deliberately left out**, so Claude asks you before each one — keep it that way. Remove this field if you prefer to approve every tool call manually.
+> **`alwaysAllow`**: This list lets Claude use Semust tools without asking for permission each time. Every tool in it is read-only. The tools that change something — the social tools that create, change, publish or delete posts (`social_create_post`, `social_update_post`, `social_delete_post`, `social_retry_post`, `social_import_media`) and the content-group tools that save, edit or delete a group (`content_group_create`, `content_group_update`, `content_group_delete`) — are **deliberately left out**, so Claude asks you before each one — keep it that way. Remove this field if you prefer to approve every tool call manually.
 
 **Quit Claude Desktop completely** and reopen it — on Windows right-click the system tray icon >
 Quit, on macOS press <kbd>Cmd</kbd>+<kbd>Q</kbd> or choose Claude > Quit. Closing the window is not
@@ -318,7 +326,7 @@ enough on either.
 
 ### Step 4: Verify
 
-In a new Claude chat, look for the **tools icon** (hammer/wrench) near the text input. Click it — you should see "semust-mcp" with 82 tools.
+In a new Claude chat, look for the **tools icon** (hammer/wrench) near the text input. Click it — you should see "semust-mcp" with 89 tools.
 
 Type: **"Show me my projects"** — Claude should list your Semust projects.
 
@@ -326,7 +334,7 @@ Type: **"Show me my projects"** — Claude should list your Semust projects.
 
 ## Load only the tools you need
 
-By default the server exposes all 82 tools. To keep your assistant focused, set `SEMUST_MCP_TOOLSETS` to the families you use. `list_projects` is always included.
+By default the server exposes all 89 tools. To keep your assistant focused, set `SEMUST_MCP_TOOLSETS` to the families you use. `list_projects` is always included.
 
 ```json
 "env": {
@@ -338,7 +346,7 @@ By default the server exposes all 82 tools. To keep your assistant focused, set 
 
 | Family | Tools | Family | Tools |
 | --- | --- | --- | --- |
-| `gsc` | Search Console data and reports | `ym` | Yandex Metrica |
+| `gsc` | Search Console data, reports and content groups | `ym` | Yandex Metrica |
 | `ga` | Google Analytics 4 | `bing` | Bing Webmaster |
 | `gads` | Google Ads | `metrik` | Semust Metrik web analytics |
 | `rank` | Rank Tracker | `changes` | Change Monitor |
@@ -367,7 +375,7 @@ Unset, empty or `all` loads everything. A misspelt name loads everything and pri
 
 ---
 
-## Available Tools (82)
+## Available Tools (89)
 
 ### Projects
 | Tool | Description |
@@ -393,6 +401,22 @@ Unset, empty or `all` loads everything. A misspelt name loads everything and pri
 | `report_striking_distance` | Keywords on page 2-3 (quick wins) |
 | `report_low_ctr` | Low CTR items with click improvement potential |
 | `report_thin_content` | Underperforming content for audit |
+
+### Search Console — Content Groups
+Save a set of pages (URL patterns, e.g. `/blog/`) or search queries (exact queries) and track
+their Search Console numbers together, as in Semust > Search Console > İçerik Grupları. Claude
+previews what a group would contain and asks before saving, changing or deleting one. Any MCP
+key can do this; the old account key can only read.
+
+| Tool | Description |
+|------|-------------|
+| `content_group_list` | The project's saved content groups |
+| `content_group_get` | One group's clicks, impressions, position, first vs second half, daily series and top pages/queries |
+| `content_group_suggest` | Page groups suggested from the site's URL folders |
+| `content_group_preview` | What a set of patterns would match — nothing is saved |
+| `content_group_create` | Save a new group (after a preview and your yes) |
+| `content_group_update` | Rename a group or replace its patterns |
+| `content_group_delete` | Delete a group (Search Console data is not affected) |
 
 ### Google Analytics — Data
 | Tool | Description |
@@ -513,7 +537,7 @@ validates each post with a dry run and asks before scheduling or publishing.
 | `social_update_post` | Change the text, time or destinations of a draft or scheduled post |
 | `social_delete_post` | Delete a post and cancel what has not been published yet |
 | `social_retry_post` | Try failed deliveries again |
-| `social_import_media` | Upload an image (or a LinkedIn PDF) from a public URL for a post |
+| `social_import_media` | Upload an image, a LinkedIn PDF or an MP4 video from a public URL for a post |
 
 ### Bing Webmaster
 | Tool | Description |
@@ -573,7 +597,7 @@ claude mcp add --scope user semust -- /path/to/semust-mcp/.venv/bin/python /path
 
 **Verify:** run `claude mcp list` — you should see `semust: ... - ✔ Connected`. Inside Claude Code,
 reload the window (VS Code: **Developer: Reload Window**) or restart the CLI, then type `/mcp` to
-see the server and its 82 tools. Ask **"Show me my Semust projects"** to confirm it works.
+see the server and its 89 tools. Ask **"Show me my Semust projects"** to confirm it works.
 
 ---
 
